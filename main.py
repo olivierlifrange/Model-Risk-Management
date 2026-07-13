@@ -24,9 +24,48 @@ portfolio = pd.DataFrame([
 
 tickers = portfolio["ticker"].tolist()
 
+# ---------------------------DATA PREPARATION---------------------------
+
 # Pull daily price history from Yahoo Finance
 prices = yf.download(tickers, start="2015-01-01", auto_adjust=True)["Close"]
 prices = prices[tickers]  # preserve portfolio order
 
-print(prices.tail())
-print("Hello")
+# Daily log returns per risk factor
+log_returns = np.log(prices / prices.shift(1)).dropna()
+
+positions = portfolio.set_index("ticker")["position_usd_mm"][tickers]
+
+
+# --------------------------- EMPIRICAL DISTRIBUTION DIAGNOSTICS---------------------------------
+fig, axes = plt.subplots(3, 3, figsize=(12, 10))
+for ax, ticker in zip(axes.flatten(), tickers):
+    r = log_returns[ticker].dropna()
+    stats.probplot(r, dist="norm", plot=ax)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.set_title(f"{ticker}", fontsize=10)
+fig.suptitle("Empirical Log-Return Distributions vs. Normal", fontsize=14)
+plt.tight_layout()
+plt.show()
+# --------------------------- V1: PLAIN HISTORICAL SIMULATION VaR / ES---------------------------
+
+LOOKBACK_DAYS = 252
+CONFIDENCE = 0.99
+
+# Most recent 252 days of returns, revalue today's positions under each historical scenario
+scenario_returns = log_returns.tail(LOOKBACK_DAYS)
+scenario_pnl = (np.exp(scenario_returns) - 1) * positions.values
+portfolio_pnl = scenario_pnl.sum(axis=1)
+
+v1var = -portfolio_pnl.quantile(1 - CONFIDENCE)
+v1es = -portfolio_pnl[portfolio_pnl <= -v1var].mean()
+
+v1_summary = pd.DataFrame({
+    "1-day": [v1var, v1es],
+    "10-day": [v1var * np.sqrt(10), v1es * np.sqrt(10)],
+}, index=[f"VaR {CONFIDENCE:.0%}", f"ES {CONFIDENCE:.0%}"])
+
+print(v1_summary.round(4).to_string())
+
+# --------------------------- V2: PLAIN HISTORICAL SIMULATION VaR / ES---------------------------
+
