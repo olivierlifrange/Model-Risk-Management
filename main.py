@@ -37,6 +37,8 @@ positions = portfolio.set_index("ticker")["position_usd_mm"][tickers]
 
 
 # --------------------------- EMPIRICAL DISTRIBUTION DIAGNOSTICS---------------------------------
+
+# QQ PLOTS
 fig, axes = plt.subplots(3, 3, figsize=(12, 10))
 for ax, ticker in zip(axes.flatten(), tickers):
     r = log_returns[ticker].dropna()
@@ -48,6 +50,7 @@ fig.suptitle("Empirical Log-Return Distributions vs. Normal", fontsize=14)
 plt.tight_layout()
 plt.show()
 
+# HISTOGRAMS
 fig, axes = plt.subplots(3, 3, figsize=(12, 10))
 for ax, ticker in zip(axes.flatten(), tickers):
     r = log_returns[ticker].dropna()
