@@ -47,6 +47,19 @@ for ax, ticker in zip(axes.flatten(), tickers):
 fig.suptitle("Empirical Log-Return Distributions vs. Normal", fontsize=14)
 plt.tight_layout()
 plt.show()
+
+fig, axes = plt.subplots(3, 3, figsize=(12, 10))
+for ax, ticker in zip(axes.flatten(), tickers):
+    r = log_returns[ticker].dropna()
+    mu, sigma = r.mean(), r.std()
+    sns.histplot(r, bins=60, stat="density", color="steelblue", ax=ax, alpha=0.6)
+    x = np.linspace(r.min(), r.max(), 200)
+    ax.plot(x, stats.norm.pdf(x, mu, sigma), color="firebrick", lw=1.0, label="Fitted Normal")
+    ax.set_title(f"{ticker}", fontsize=10)
+    ax.legend(fontsize=7)
+fig.suptitle("Empirical Density vs. Fitted Normal", fontsize=14)
+plt.tight_layout()
+plt.show()
 # --------------------------- V1: PLAIN HISTORICAL SIMULATION VaR / ES---------------------------
 
 LOOKBACK_DAYS = 252
