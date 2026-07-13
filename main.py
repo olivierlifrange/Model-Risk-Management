@@ -29,3 +29,4 @@ prices = yf.download(tickers, start="2015-01-01", auto_adjust=True)["Close"]
 prices = prices[tickers]  # preserve portfolio order
 
 print(prices.tail())
+print("Hello")
