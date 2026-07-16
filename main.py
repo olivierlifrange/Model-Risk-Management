@@ -35,7 +35,7 @@ log_returns = np.log(prices / prices.shift(1)).dropna()
 
 positions = portfolio.set_index("ticker")["position_usd_mm"][tickers]
 
-
+log_returns = np.log(prices / prices.shift(1)).dropna()
 # --------------------------- EMPIRICAL DISTRIBUTION DIAGNOSTICS---------------------------------
 
 # QQ PLOTS
@@ -83,5 +83,49 @@ v1_summary = pd.DataFrame({
 
 print(v1_summary.round(4).to_string())
 
-# --------------------------- V2: PLAIN HISTORICAL SIMULATION VaR / ES---------------------------
+# --------------------------- V2: MODEL-BUILDING (VARIANCE-COVARIANCE) VaR / ES---------------------------
 
+def portfolio_sd(Sigma, positions):
+    """
+    Portfolio standard deviation under the linear model (Hull, Ch.13, Sec 13.1).
+
+    sigma_P^2 = positions^T @ Sigma @ positions, where Sigma is the covariance
+    matrix of risk-factor (log-)returns and positions is the $ position vector,
+    both ordered consistently with `tickers`.
+    """
+    positions = np.asarray(positions, dtype=float)
+    variance = positions @ (Sigma @ positions)
+    return np.sqrt(variance)
+
+# --------------------------- Model 2a: Equal-Weighted (Sample) Covariance ---------------------------
+
+# Sample covariance of log-returns over the same trailing window used by Model 1
+Sigma_ew = log_returns.tail(LOOKBACK_DAYS).cov().values
+sigma_p_ew = portfolio_sd(Sigma_ew, positions.values)
+
+# --------------------------- Model 2b: EWMA (RiskMetrics) Covariance ---------------------------
+
+LAMBDA = 0.94
+BURN_IN = 100
+
+# EWMA covariance matrix (Hull, Ch.13, Sec 13.3 / RiskMetrics, lambda = 0.94).
+# Recursive update Sigma_t = lambda * Sigma_(t-1) + (1 - lambda) * outer(r_(t-1), r_(t-1)),
+# run over the full available return history (unbounded, exponentially decaying weights,
+# per Hull's own treatment rather than a fixed window). Seeded with the equal-weighted
+# sample covariance over the first BURN_IN days.
+returns_arr = log_returns.values
+n_days, n_assets = returns_arr.shape
+
+Sigma_ewma = np.zeros((n_days, n_assets, n_assets))
+Sigma_ewma[BURN_IN - 1] = np.cov(returns_arr[:BURN_IN], rowvar=False)
+
+for t in range(BURN_IN, n_days):
+    r_prev = returns_arr[t - 1]
+    Sigma_ewma[t] = LAMBDA * Sigma_ewma[t - 1] + (1 - LAMBDA) * np.outer(r_prev, r_prev)
+
+# Full time series of sigma_P,t = sqrt(positions^T @ Sigma_t @ positions)
+sigma_p_ewma = pd.Series(
+    [portfolio_sd(Sigma_ewma[t], positions.values) for t in range(BURN_IN - 1, n_days)],
+    index=log_returns.index[BURN_IN - 1:],
+    name="sigma_p_ewma",
+)
