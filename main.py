@@ -48,7 +48,7 @@ for ax, ticker in zip(axes.flatten(), tickers):
     ax.set_title(f"{ticker}", fontsize=10)
 fig.suptitle("Empirical Log-Return Distributions vs. Normal", fontsize=14)
 plt.tight_layout()
-plt.show()
+# plt.show()
 
 # HISTOGRAMS
 fig, axes = plt.subplots(3, 3, figsize=(12, 10))
@@ -62,7 +62,7 @@ for ax, ticker in zip(axes.flatten(), tickers):
     ax.legend(fontsize=7)
 fig.suptitle("Empirical Density vs. Fitted Normal", fontsize=14)
 plt.tight_layout()
-plt.show()
+# plt.show()
 # --------------------------- V1: PLAIN HISTORICAL SIMULATION VaR / ES---------------------------
 
 LOOKBACK_DAYS = 252
@@ -81,8 +81,8 @@ v1_summary = pd.DataFrame({
     "10-day": [v1var * np.sqrt(10), v1es * np.sqrt(10)],
 }, index=[f"VaR {CONFIDENCE:.0%}", f"ES {CONFIDENCE:.0%}"])
 
-print(v1_summary.round(4).to_string())
-
+resultV1 = v1_summary.round(4).to_string()
+print(resultV1)
 # --------------------------- V2: MODEL-BUILDING (VARIANCE-COVARIANCE) VaR / ES---------------------------
 
 def portfolio_sd(Sigma, positions):
@@ -97,11 +97,18 @@ def portfolio_sd(Sigma, positions):
     variance = positions @ (Sigma @ positions)
     return np.sqrt(variance)
 
+z = stats.norm.ppf(CONFIDENCE) # my VaR Quantile
+phi_z = stats.norm.pdf(z)
+
 # --------------------------- Model 2a: Equal-Weighted (Sample) Covariance ---------------------------
 
 # Sample covariance of log-returns over the same trailing window used by Model 1
 Sigma_ew = log_returns.tail(LOOKBACK_DAYS).cov().values
 sigma_p_ew = portfolio_sd(Sigma_ew, positions.values)
+
+#results
+v2a_var = z * sigma_p_ew
+v2a_es = (phi_z / (1 - CONFIDENCE)) * sigma_p_ew #assuming portfolio P&L is normally distributed:
 
 # --------------------------- Model 2b: EWMA (RiskMetrics) Covariance ---------------------------
 
@@ -129,3 +136,15 @@ sigma_p_ewma = pd.Series(
     index=log_returns.index[BURN_IN - 1:],
     name="sigma_p_ewma",
 )
+#results
+v2b_var = z * sigma_p_ewma.iloc[-1]
+v2b_es = (phi_z / (1 - CONFIDENCE)) * sigma_p_ewma.iloc[-1]
+
+#output
+v2_summary = pd.DataFrame({
+    "1-day": [v2a_var, v2a_es, v2b_var, v2b_es],
+    "10-day": [v2a_var*np.sqrt(10), v2a_es*np.sqrt(10), v2b_var*np.sqrt(10), v2b_es*np.sqrt(10)],
+}, index=["VaR EW", "ES EW", "VaR EWMA", "ES EWMA"])
+
+resultV2 = v2_summary.round(4).to_string()
+print(resultV2)
